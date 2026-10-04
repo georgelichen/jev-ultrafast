@@ -72,16 +72,16 @@
   const flyoutSelector = 'dialog[open],[role="dialog"],[aria-modal="true"],.ant-popover:not(.ant-popover-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-select-dropdown:not(.ant-select-dropdown-hidden)';
   const findActiveFlyout = () =>
     [...document.querySelectorAll(flyoutSelector)].find(f => f.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
-  cache.pageKey=()=>{
-    const flyout = findActiveFlyout();
+  cache.flyoutSelector = flyoutSelector;
+  cache.findActiveFlyout = findActiveFlyout;
+  cache.pageKey=(flyout=findActiveFlyout())=>{
     return [performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
       [...document.querySelectorAll('input,textarea,select')].filter(safe)
         .map(e=>[identity(e),e.value,e.checked,e.selectedIndex,e.disabled,e.readOnly]),
       flyout ? identity(flyout) : null];
   };
-  cache.guard=e=>{
+  cache.guard=(e,flyout=findActiveFlyout())=>{
     if (!e?.isConnected || !visible(e)) return null;
-    const flyout = findActiveFlyout();
     if (flyout && !flyout.contains(e)) return null;
     const rname=role(e);
     const editable=e.tagName==='INPUT' || e.tagName==='TEXTAREA' || e.isContentEditable ||
@@ -144,8 +144,8 @@
     }
   }
   const text=words.join('\n').slice(0,6000), height=document.documentElement.scrollHeight;
-  const page_key=cache.pageKey(), guards={};
-  for (const a of actions) if (!(a.node in guards)) guards[a.node]=cache.guard(cache.nodes.get(a.node));
+  const page_key=cache.pageKey(activeFlyout), guards={};
+  for (const a of actions) if (!(a.node in guards)) guards[a.node]=cache.guard(cache.nodes.get(a.node),activeFlyout);
   // Compare meaning and identity. Geometry is always resolved and hit-tested just before input.
   const semantics=actions.map(({rect,...action})=>action);
   const marker=[performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,

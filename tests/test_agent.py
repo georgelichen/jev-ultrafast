@@ -354,7 +354,8 @@ def test_browser_close_clears_target_on_success(monkeypatch):
 
 
 def test_demo_custom_url_validation(monkeypatch):
-    monkeypatch.setattr(demo, "close_browser", Mock())
+    close_mock = Mock()
+    monkeypatch.setattr(demo, "close_browser", close_mock)
     created = {}
 
     def mock_agent(start_url, goal, **kwargs):
@@ -370,19 +371,24 @@ def test_demo_custom_url_validation(monkeypatch):
     # Normalized scheme
     demo.command("reset", {"scenario": "custom", "url": "wikipedia.org", "goal": "Find article"})
     assert created["url"] == "https://wikipedia.org"
+    assert close_mock.call_count == 1
 
     # Default fallback
     demo.command("reset", {"scenario": "custom", "url": "", "goal": "Find article"})
     assert created["url"] == "https://www.wikipedia.org"
+    assert close_mock.call_count == 2
 
     # Explicit http URL
     demo.command("reset", {"scenario": "custom", "url": "http://localhost:8000", "goal": "Find article"})
     assert created["url"] == "http://localhost:8000"
+    assert close_mock.call_count == 3
 
-    # Invalid schemes rejected
+    # Invalid schemes rejected before close_browser()
     with pytest.raises(ValueError, match="Enter a valid URL"):
         demo.command("reset", {"scenario": "custom", "url": "javascript:alert(1)", "goal": "Find article"})
+    assert close_mock.call_count == 3
 
     with pytest.raises(ValueError, match="Enter a valid URL"):
         demo.command("reset", {"scenario": "custom", "url": "ftp://files.org", "goal": "Find article"})
+    assert close_mock.call_count == 3
 

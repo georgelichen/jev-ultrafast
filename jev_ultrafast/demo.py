@@ -54,7 +54,6 @@ def command(name, body):
         goal = body.get("goal", "").strip()
         if not goal or len(goal) > 2000:
             raise ValueError("Enter 1–2,000 characters")
-        close_browser()
         if scenario == "custom":
             start_url = custom_url or "https://www.wikipedia.org"
             parsed = urlparse(start_url)
@@ -67,6 +66,7 @@ def command(name, body):
             start_url = "https://www.google.com/travel/flights?hl=en"
         else:
             start_url = f"{ORIGIN}/fixture.html?scenario={scenario}"
+        close_browser()
         AGENT = Agent(
             start_url,
             goal,

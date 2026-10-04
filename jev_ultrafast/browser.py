@@ -148,8 +148,8 @@ def browser_operation(request):
               const e=window.__jevFast?.nodes.get(action.node);
               if (!e?.isConnected || e.matches(':disabled') || e.closest('[aria-disabled="true"],[inert]') ||
                   !e.checkVisibility({checkOpacity:true,checkVisibilityCSS:true})) return null;
-              const flyoutSelector = 'dialog[open],[role="dialog"],[aria-modal="true"],.ant-popover:not(.ant-popover-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-select-dropdown:not(.ant-select-dropdown-hidden)';
-              const flyout = [...document.querySelectorAll(flyoutSelector)].find(f => f.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
+              const flyout = window.__jevFast?.findActiveFlyout?.() ||
+                [...document.querySelectorAll('dialog[open],[role="dialog"],[aria-modal="true"],.ant-popover:not(.ant-popover-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-select-dropdown:not(.ant-select-dropdown-hidden)')].find(f => f.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
               if (flyout && !flyout.contains(e)) return null;
               if (action.kind==='fill' && (e.readOnly || e.getAttribute('aria-readonly')==='true')) return null;
               let r=e.getBoundingClientRect();

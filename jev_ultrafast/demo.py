@@ -57,6 +57,12 @@ def command(name, body):
         close_browser()
         if scenario == "custom":
             start_url = custom_url or "https://www.wikipedia.org"
+            parsed = urlparse(start_url)
+            if not parsed.scheme:
+                start_url = f"https://{start_url}"
+                parsed = urlparse(start_url)
+            if parsed.scheme not in {"http", "https"} or not parsed.netloc:
+                raise ValueError("Enter a valid URL starting with http:// or https://")
         elif scenario == "flights":
             start_url = "https://www.google.com/travel/flights?hl=en"
         else:

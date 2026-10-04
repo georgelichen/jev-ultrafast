@@ -25,15 +25,30 @@
     'option','gridcell','combobox','textbox','searchbox','spinbutton'];
   const selector='a[href],button,input,textarea,select,summary,[contenteditable="true"],'+
     roles.map(role=>'[role="'+role+'"]').join(',');
+  const styleCache = new WeakMap();
+  const styleOf = el => {
+    if (!el || el.nodeType !== 1) return null;
+    let s = styleCache.get(el);
+    if (!s) {
+      s = window.getComputedStyle(el);
+      styleCache.set(el, s);
+    }
+    return s;
+  };
   const isClickable = e => {
     if (['HTML','BODY','SCRIPT','STYLE','NOSCRIPT','TEMPLATE','SVG','PATH'].includes(e.tagName)) return false;
+    if (e.offsetWidth === 0 && e.offsetHeight === 0 && e.getClientRects().length === 0) return false;
     if (e.parentElement?.closest('button,a[href],select,[role="button"],[role="link"]')) return false;
-    if (window.getComputedStyle(e).cursor !== 'pointer') return false;
+    if (e.querySelector('button,select,input,textarea,a[href],[role="button"],[role="link"]')) return false;
+    const style = styleOf(e);
+    if (!style || style.cursor !== 'pointer') return false;
+    const parentStyle = styleOf(e.parentElement);
+    if (parentStyle && parentStyle.cursor === 'pointer') return false;
     const distinctChildren = Array.from(e.children).filter(c => {
       if (['IMG','SVG','PATH','I','CANVAS'].includes(c.tagName)) return false;
       const ct = c.textContent.trim(), et = e.textContent.trim();
       if (!ct || ct === et) return false;
-      return window.getComputedStyle(c).cursor === 'pointer';
+      return styleOf(c)?.cursor === 'pointer';
     });
     return distinctChildren.length === 0;
   };
@@ -54,27 +69,37 @@
     if (isClickable(e)) return 'button';
     return null;
   };
-  cache.pageKey=()=>[performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
-    [...document.querySelectorAll('input,textarea,select')].filter(safe)
-      .map(e=>[identity(e),e.value,e.checked,e.selectedIndex,e.disabled,e.readOnly])];
+  const flyoutSelector = 'dialog[open],[role="dialog"],[aria-modal="true"],.ant-popover:not(.ant-popover-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-select-dropdown:not(.ant-select-dropdown-hidden)';
+  const findActiveFlyout = () =>
+    [...document.querySelectorAll(flyoutSelector)].find(f => f.checkVisibility({checkOpacity:true,checkVisibilityCSS:true}));
+  cache.pageKey=()=>{
+    const flyout = findActiveFlyout();
+    return [performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
+      [...document.querySelectorAll('input,textarea,select')].filter(safe)
+        .map(e=>[identity(e),e.value,e.checked,e.selectedIndex,e.disabled,e.readOnly]),
+      flyout ? identity(flyout) : null];
+  };
   cache.guard=e=>{
     if (!e?.isConnected || !visible(e)) return null;
+    const flyout = findActiveFlyout();
+    if (flyout && !flyout.contains(e)) return null;
     const rname=role(e);
     const editable=e.tagName==='INPUT' || e.tagName==='TEXTAREA' || e.isContentEditable ||
       ['textbox','searchbox','combobox','spinbutton'].includes(rname);
     const scope=editable ? e : (e.closest('form,dialog,[role="dialog"],article,li,tr,[role="row"]') || e.parentElement);
-    return [identity(e),rname,editable ? '' : name(e),e.value??null,e.checked??null,e.selectedIndex??null,
+    return [identity(e),rname,name(e),e.value??null,e.checked??null,e.selectedIndex??null,
       e.readOnly??null,e.matches(':disabled'),e.getAttribute('aria-disabled'),
       e.getAttribute('aria-expanded'),e.getAttribute('aria-checked'),e.getAttribute('aria-selected'),
-      e.getAttribute('href'),editable ? '' : (scope?.innerText?.slice(0,6000)||'')];
+      e.getAttribute('href'),flyout ? identity(flyout) : null,editable ? '' : (scope?.innerText?.slice(0,6000)||'')];
   };
   const actions=[], seen=new Set();
   const elements=[...document.querySelectorAll(selector)];
   for (const e of document.querySelectorAll('div,span,li,p')) {
+    if (e.offsetWidth === 0 && e.offsetHeight === 0 && e.getClientRects().length === 0) continue;
     if (isClickable(e)) elements.push(e);
   }
-  const activeFlyout=document.querySelector('dialog[open],[role="dialog"],[aria-modal="true"],.ant-popover:not(.ant-popover-hidden),.ant-dropdown:not(.ant-dropdown-hidden),.ant-select-dropdown:not(.ant-select-dropdown-hidden)');
-  const hasFlyout=activeFlyout && activeFlyout.checkVisibility({checkOpacity:true,checkVisibilityCSS:true});
+  const activeFlyout=findActiveFlyout();
+  const hasFlyout=!!activeFlyout;
   for (const e of elements) {
     if (seen.has(e)) continue;
     seen.add(e);
@@ -86,10 +111,7 @@
     if (!rname || r.width<=0 || r.height<=0 || x<0 || y<0 || x>=innerWidth || y>=maxY) continue;
     if (rname==='gridcell' && e.querySelector('button,[role="button"]')) continue;
     let lbl=name(e).trim();
-    if (!lbl && !e.querySelector('img')) continue;
-    if (inFlyout && ((lbl.includes('查看') && lbl.includes('宝贝')) || (typeof e.className === 'string' && e.className.includes('searchBtn')))) {
-      if (!lbl.includes('Submit')) lbl = '确定 (Submit filter): ' + lbl;
-    }
+    if (!lbl && !e.querySelector('img')) lbl=rname;
     const base={node:identity(e),role:rname,label:lbl||rname,
       rect:{x:r.x,y:r.y,w:r.width,h:r.height}};
     for (const key of ['checked','selected','expanded']) {
@@ -127,7 +149,7 @@
   // Compare meaning and identity. Geometry is always resolved and hit-tested just before input.
   const semantics=actions.map(({rect,...action})=>action);
   const marker=[performance.timeOrigin,location.href,scrollX,scrollY,innerWidth,innerHeight,
-    document.title,text,semantics,page_key[6]];
+    document.title,text,semantics,page_key[6],page_key[7]];
   const omitted_actions=Math.max(0,actions.length-250);
   actions.splice(250);
   actions.forEach((a,i)=>a.id='e'+(i+1));

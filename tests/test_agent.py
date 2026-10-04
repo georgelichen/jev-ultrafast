@@ -8,7 +8,7 @@ from unittest.mock import Mock
 import pytest
 
 from jev_ultrafast import agent as loop
-from jev_ultrafast import model
+from jev_ultrafast import browser, demo, model
 from jev_ultrafast.browser import StalePage, browser_operation, fingerprint
 
 
@@ -326,3 +326,63 @@ def test_navigation_during_prediction_reobserves_without_action(runner):
     assert runner.state["status"] == "ready"
     assert runner.state["decision"] is None
     runner.state["browser"].act.assert_not_called()
+
+
+def test_fenced_code_inside_text_helper_value(monkeypatch):
+    monkeypatch.setenv("TEXT_MODEL_API_KEY", "test")
+    post = Mock(return_value={"choices": [{"message": {"content": '{"text":"Look at ```json\\n{\\"foo\\": 1}\\n```"}'}}]})
+    monkeypatch.setattr(model, "post_json", post)
+    context = model.field_context('Write code', page()["actions"][0], page(), [])
+    val, _ = model.field_text(context)
+    assert val == 'Look at ```json\n{"foo": 1}\n```'
+
+
+def test_browser_close_preserves_target_on_failure(monkeypatch):
+    b = browser.Browser.__new__(browser.Browser)
+    b.target = "target-123"
+    monkeypatch.setattr(browser, "cdp", Mock(side_effect=RuntimeError("CDP error")))
+    b.close()
+    assert b.target == "target-123"
+
+
+def test_browser_close_clears_target_on_success(monkeypatch):
+    b = browser.Browser.__new__(browser.Browser)
+    b.target = "target-123"
+    monkeypatch.setattr(browser, "cdp", Mock(return_value={}))
+    b.close()
+    assert b.target is None
+
+
+def test_demo_custom_url_validation(monkeypatch):
+    monkeypatch.setattr(demo, "close_browser", Mock())
+    created = {}
+
+    def mock_agent(start_url, goal, **kwargs):
+        created["url"] = start_url
+        created["goal"] = goal
+        m = Mock()
+        m.state = {}
+        return m
+
+    monkeypatch.setattr(demo, "Agent", mock_agent)
+    monkeypatch.setattr(demo, "response_state", Mock(return_value={}))
+
+    # Normalized scheme
+    demo.command("reset", {"scenario": "custom", "url": "wikipedia.org", "goal": "Find article"})
+    assert created["url"] == "https://wikipedia.org"
+
+    # Default fallback
+    demo.command("reset", {"scenario": "custom", "url": "", "goal": "Find article"})
+    assert created["url"] == "https://www.wikipedia.org"
+
+    # Explicit http URL
+    demo.command("reset", {"scenario": "custom", "url": "http://localhost:8000", "goal": "Find article"})
+    assert created["url"] == "http://localhost:8000"
+
+    # Invalid schemes rejected
+    with pytest.raises(ValueError, match="Enter a valid URL"):
+        demo.command("reset", {"scenario": "custom", "url": "javascript:alert(1)", "goal": "Find article"})
+
+    with pytest.raises(ValueError, match="Enter a valid URL"):
+        demo.command("reset", {"scenario": "custom", "url": "ftp://files.org", "goal": "Find article"})
+

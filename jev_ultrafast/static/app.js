@@ -166,6 +166,15 @@ $("scenario").addEventListener("change", () => {
   if (urlBox) urlBox.style.display = isCustom ? "block" : "none";
   $("goal").value = goals[$("scenario").value] || "";
 });
+$("custom-url")?.addEventListener("input", () => {
+  const url = $("custom-url").value.trim();
+  if (url && !url.includes("wikipedia.org") && $("goal").value === goals.custom) {
+    $("goal").value = "";
+    $("goal").placeholder = "Describe the task to perform on this site…";
+  } else if ((!url || url.includes("wikipedia.org")) && !$("goal").value) {
+    $("goal").value = goals.custom;
+  }
+});
 $("choose").addEventListener("click", () =>
   perform(() => call("predict"), "Jev is comparing the actions…"),
 );
